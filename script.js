@@ -22,7 +22,9 @@ function switchTab(tabId) {
     .forEach((el) => el.classList.remove("active"));
 
   document.getElementById(`tab-${tabId}`).classList.add("active");
-  event.currentTarget.classList.add("active");
+  if (event && event.currentTarget) {
+    event.currentTarget.classList.add("active");
+  }
 
   // Page Context Update
   const titles = {
@@ -77,11 +79,30 @@ function updateAnalytics() {
     `${Math.min(overallAvg, 100)}%`;
 }
 
-// --- 1. QR ENGINE GENERATION CONTEXT ---
+// --- 1. QR ENGINE GENERATION CONTEXT WITH STRICT 'CSC/' VALIDATION ---
 document.getElementById("generator-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  const id = document.getElementById("candidate-id").value.trim();
+
+  const idInput = document.getElementById("candidate-id");
+  const rawId = idInput.value.trim();
   const name = document.getElementById("candidate-name").value.trim();
+
+  // Strict structural pattern validation mapping (e.g., CSC/2022/1157)
+  const cscMatricRegex = /^CSC\/[0-9]{4}\/[0-9]+$/i;
+
+  if (!cscMatricRegex.test(rawId)) {
+    showToast(
+      "Invalid Format! Matric number must match 'CSC/YYYY/####'",
+      "error",
+    );
+    idInput.classList.add("input-error");
+    idInput.focus();
+    return; // Block pipeline execution completely
+  }
+
+  // Clear any persistent error markers and enforce uppercase standardization
+  idInput.classList.remove("input-error");
+  const id = rawId.toUpperCase();
 
   // Prevent cross-contamination or duplicate data registrations
   if (!students.some((s) => s.id === id)) {
@@ -280,72 +301,84 @@ function renderReportTable() {
 
 // Universal Format Selection router
 function triggerReportGeneration() {
-    const format = document.getElementById("export-format-select").value;
-    
-    switch (format) {
-        case "csv":
-            generateCSVEngine();
-            break;
-        case "excel":
-            generateExcelEngine();
-            break;
-        case "pdf":
-            generatePDFEngine();
-            break;
-        case "docx":
-            generateDocxEngine();
-            break;
-        default:
-            showToast("Unsupported configuration selection.", "error");
-    }
+  const format = document.getElementById("export-format-select").value;
+
+  switch (format) {
+    case "csv":
+      generateCSVEngine();
+      break;
+    case "excel":
+      generateExcelEngine();
+      break;
+    case "pdf":
+      generatePDFEngine();
+      break;
+    case "docx":
+      generateDocxEngine();
+      break;
+    default:
+      showToast("Unsupported configuration selection.", "error");
+  }
 }
 
 // 1. CLEAN CSV ENGINE
 function generateCSVEngine() {
-    const totalSessions = parseInt(document.getElementById("total-sessions").value) || 1;
-    let csvContent = "data:text/csv;charset=utf-8,Student ID,Full Name,Attended,Absences,Percentage,Status\n";
+  const totalSessions =
+    parseInt(document.getElementById("total-sessions").value) || 1;
+  let csvContent =
+    "data:text/csv;charset=utf-8,Student ID,Full Name,Attended,Absences,Percentage,Status\n";
 
-    students.forEach(s => {
-        const attended = attendanceLogs.filter(log => log.id === s.id).length;
-        const absent = Math.max(0, totalSessions - attended);
-        const pct = Math.min(((attended / totalSessions) * 100), 100).toFixed(1);
-        const status = pct >= 75 ? "Good Standing" : pct >= 50 ? "Low Margin" : "Critical Risk";
-        csvContent += `"${s.id}","${s.name}",${attended},${absent},${pct}%,${status}\n`;
-    });
+  students.forEach((s) => {
+    const attended = attendanceLogs.filter((log) => log.id === s.id).length;
+    const absent = Math.max(0, totalSessions - attended);
+    const pct = Math.min((attended / totalSessions) * 100, 100).toFixed(1);
+    const status =
+      pct >= 75 ? "Good Standing" : pct >= 50 ? "Low Margin" : "Critical Risk";
+    csvContent += `"${s.id}","${s.name}",${attended},${absent},${pct}%,${status}\n`;
+  });
 
-    downloadVirtualFile(encodeURI(csvContent), `Attendance_Report_${new Date().getFullYear()}.csv`);
+  downloadVirtualFile(
+    encodeURI(csvContent),
+    `Attendance_Report_${new Date().getFullYear()}.csv`,
+  );
 }
 
 // 2. EXCEL ENGINE (Tab-Delimited Spreadsheets XML Compatibility)
 function generateExcelEngine() {
-    const totalSessions = parseInt(document.getElementById("total-sessions").value) || 1;
-    let excelContent = 'data:application/vnd.ms-excel;charset=utf-8,';
-    excelContent += "Student ID\tFull Name\tAttended\tAbsences\tPercentage\tStatus\n";
+  const totalSessions =
+    parseInt(document.getElementById("total-sessions").value) || 1;
+  let excelContent = "data:application/vnd.ms-excel;charset=utf-8,";
+  excelContent +=
+    "Student ID\tFull Name\tAttended\tAbsences\tPercentage\tStatus\n";
 
-    students.forEach(s => {
-        const attended = attendanceLogs.filter(log => log.id === s.id).length;
-        const absent = Math.max(0, totalSessions - attended);
-        const pct = Math.min(((attended / totalSessions) * 100), 100).toFixed(1);
-        const status = pct >= 75 ? "Good Standing" : pct >= 50 ? "Low Margin" : "Critical Risk";
-        excelContent += `${s.id}\t${s.name}\t${attended}\t${absent}\t${pct}%\t${status}\n`;
-    });
+  students.forEach((s) => {
+    const attended = attendanceLogs.filter((log) => log.id === s.id).length;
+    const absent = Math.max(0, totalSessions - attended);
+    const pct = Math.min((attended / totalSessions) * 100, 100).toFixed(1);
+    const status =
+      pct >= 75 ? "Good Standing" : pct >= 50 ? "Low Margin" : "Critical Risk";
+    excelContent += `${s.id}\t${s.name}\t${attended}\t${absent}\t${pct}%\t${status}\n`;
+  });
 
-    downloadVirtualFile(encodeURI(excelContent), `Attendance_Registry_${new Date().getFullYear()}.xls`);
+  downloadVirtualFile(
+    encodeURI(excelContent),
+    `Attendance_Registry_${new Date().getFullYear()}.xls`,
+  );
 }
 
-// 3. HIGH-FIDELITY WEB-PRINT PDF ENGINE 
+// 3. HIGH-FIDELITY WEB-PRINT PDF ENGINE
 function generatePDFEngine() {
-    const printWindow = window.open('', '_blank');
-    const totalSessions = document.getElementById("total-sessions").value;
-    
-    let tableRows = "";
-    students.forEach(s => {
-        const attended = attendanceLogs.filter(log => log.id === s.id).length;
-        const pct = Math.min(((attended / totalSessions) * 100), 100).toFixed(1);
-        tableRows += `<tr><td>${s.id}</td><td>${s.name}</td><td>${attended}</td><td>${pct}%</td></tr>`;
-    });
+  const printWindow = window.open("", "_blank");
+  const totalSessions = document.getElementById("total-sessions").value;
 
-    printWindow.document.write(`
+  let tableRows = "";
+  students.forEach((s) => {
+    const attended = attendanceLogs.filter((log) => log.id === s.id).length;
+    const pct = Math.min((attended / totalSessions) * 100, 100).toFixed(1);
+    tableRows += `<tr><td>${s.id}</td><td>${s.name}</td><td>${attended}</td><td>${pct}%</td></tr>`;
+  });
+
+  printWindow.document.write(`
         <html><head><title>Attendance Report</title>
         <style>body{font-family:sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:20px;}th,td{border:1px solid #e2e8f0;padding:12px;text-align:left;}th{background:#f8fafc;}</style>
         </head><body>
@@ -355,38 +388,39 @@ function generatePDFEngine() {
         <script>window.onload = function() { window.print(); window.close(); }</script>
         </body></html>
     `);
-    printWindow.document.close();
+  printWindow.document.close();
 }
 
 // 4. CLEAN MICROSOFT WORD ENGINE (.DOCX RICH TEXT EXPORTER)
 function generateDocxEngine() {
-    const totalSessions = parseInt(document.getElementById("total-sessions").value) || 1;
-    let docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+  const totalSessions =
+    parseInt(document.getElementById("total-sessions").value) || 1;
+  let docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
     <head><title>Attendance Document</title><style>body{font-family:Arial;}</style></head>
     <body><h2>Attendance Report Summary Registry</h2><p>Term Reference Limit: ${totalSessions} sessions.</p><hr/>`;
 
-    students.forEach(s => {
-        const attended = attendanceLogs.filter(log => log.id === s.id).length;
-        const pct = Math.min(((attended / totalSessions) * 100), 100).toFixed(1);
-        docHtml += `<p><b>Student:</b> ${s.name} (${s.id}) &nbsp;|&nbsp; <b>Rate:</b> ${pct}% (${attended} check-ins)</p>`;
-    });
-    
-    docHtml += `</body></html>`;
-    
-    const blob = new Blob(['\ufeff' + docHtml], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
-    downloadVirtualFile(url, `Attendance_Export_${new Date().getFullYear()}.doc`);
+  students.forEach((s) => {
+    const attended = attendanceLogs.filter((log) => log.id === s.id).length;
+    const pct = Math.min((attended / totalSessions) * 100, 100).toFixed(1);
+    docHtml += `<p><b>Student:</b> ${s.name} (${s.id}) &nbsp;|&nbsp; <b>Rate:</b> ${pct}% (${attended} check-ins)</p>`;
+  });
+
+  docHtml += `</body></html>`;
+
+  const blob = new Blob(["\ufeff" + docHtml], { type: "application/msword" });
+  const url = URL.createObjectURL(blob);
+  downloadVirtualFile(url, `Attendance_Export_${new Date().getFullYear()}.doc`);
 }
 
 // Reusable downstream file utility downloader
 function downloadVirtualFile(uri, fileName) {
-    const link = document.createElement("a");
-    link.setAttribute("href", uri);
-    link.setAttribute("download", fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast(`Successfully exported document: ${fileName}`, "success");
+  const link = document.createElement("a");
+  link.setAttribute("href", uri);
+  link.setAttribute("download", fileName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast(`Successfully exported document: ${fileName}`, "success");
 }
 
 function removeStudent(id) {
